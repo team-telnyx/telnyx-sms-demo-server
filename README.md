@@ -14,6 +14,7 @@ The structure of the repository is as follows.
 .
 ├── bin
 │   └── demoserver          <--- top level script with CLI
+├── LICENSE
 ├── README.md
 ├── requirements.txt
 ├── setup.py
@@ -45,7 +46,7 @@ operations such as reading request body and sending a request are
 handled asynchronously. (If you are not so familiar with asynchronous
 programming, there are a number of helpful tutorials out there, such as
 this [Asynchronous I/O
-Walkthrough](http://www.pgbovine.net/python-async-io-walkthrough.htm).
+Walkthrough](http://www.pgbovine.net/python-async-io-walkthrough.htm)).
 
 ### Flask
 
@@ -109,8 +110,8 @@ distinction.
      flask    Run the Flask-based demo server.
      http     Run the HTTPServer-based demo server.
 
-   (sms-demo) user@sms-demo:~/sms-demo$ ./bin/demoserver -h 0.0.0.0 -p 8089
-   -s MY-SUPER-SECRET-SECRET -u http://sms-demo.telnyx.com:8089/sms aiohttp
+   (sms-demo) user@sms-demo:~/sms-demo$ ./bin/demoserver -h 0.0.0.0 -p 8089 \
+       -s MY-SUPER-SECRET-SECRET -u http://sms-demo.telnyx.com:8089/sms aiohttp
    ```
 
 Please make sure that the `-u` parameter matches the URL that you set as
