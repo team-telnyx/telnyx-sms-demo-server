@@ -4,10 +4,11 @@ Various helpers.
 This module contains the actual logic that does message validation and sending.
 """
 
-import base64
 import hmac
+from base64 import b64encode
 from collections import namedtuple
-from typing import Mapping
+from datetime import datetime
+from typing import Optional, Union
 
 import requests
 from aiohttp import ClientSession, ClientError
@@ -16,7 +17,7 @@ from smsdemo.constants import SEND_URL
 from smsdemo.message import SMSMessage
 
 
-ServerConfig = namedtuple("ServerConfig", "host port secret url")
+ServerConfig = namedtuple("ServerConfig", "host port secret")
 
 
 class SMSSendError(Exception):
@@ -68,18 +69,32 @@ async def async_send(msg: SMSMessage, secret: str) -> str:
         raise SMSSendError(e)
 
 
-def webhook_sig_hs256(secret: str, url: str, payload: Mapping) -> str:
-    """Generate an HMAC-SHA256 signature for the given payload.
+def get_epoch_from_header(sig_header: str)-> str:
+    """Extracts epoch timestamp from the X-Telnyx-Signature header value"""
 
-    Returns the base64-encoded signature as a str.
+    sig_key_value = dict(param.split("=", 1) for param in sig_header.split(","))
+    epoch = sig_key_value["t"]
+
+    return epoch
+
+
+def webhook_sig_hs256(secret: str, body: Union[bytes, str], epoch: Optional[str]=None) -> str:
+    """Generate header-signature value for webhook. Header value
+    consists of concatenation of an epoch timestamp seconds and
+    an HMAC-SHA256 signature of the given payload as a JSON string.
+    e.g. 't=1510139799,h=kWxvGoHJz3ToJLO1s86cBWu1ZV0hFNmVU45bY5BTlm8='
+
+    Returns a webhook signature header value.
     """
 
-    parts = [url]
-    for item in sorted(payload.items()):
-        parts.extend(item)
-    msg = "".join(parts)
+    epoch = epoch or str(int(datetime.utcnow().timestamp()))
+    body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
+    msg = epoch.encode("ascii") + b"." + body_bytes
 
-    h = hmac.new(secret.encode("utf-8"),
-                 msg=msg.encode("utf-8"),
-                 digestmod="sha256")
-    return base64.b64encode(h.digest()).decode("ascii")  # return a str
+    hash_bytes = hmac.new(secret.encode("utf-8"),
+                          msg=msg,
+                          digestmod="sha256").digest()
+    b64_encoded_hash = b64encode(hash_bytes).decode("ascii")
+    header_value = "t={},h={}".format(epoch, b64_encoded_hash)
+
+    return header_value

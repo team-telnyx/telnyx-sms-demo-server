@@ -94,15 +94,10 @@ distinction.
      Run a sample SMS echo server. The server accepts Telnyx SMS webhook
      deliveries and sends an echo of the message back to the sender.
 
-     Please ensure that the delivery url option is set properly. Otherwise,
-     signature validation will fail. The url should end with the path "/sms".
-
    Options:
      -h, --host TEXT     HTTP server IP.
      -p, --port INTEGER  HTTP server port.
      -s, --secret TEXT   Secret from your SMS messaging profile.  [required]
-     -u, --url TEXT      Callback url from your SMS messaging profile (needed for
-                         signature verification).
      --help              Show this message and exit.
 
    Commands:
@@ -111,13 +106,12 @@ distinction.
      http     Run the HTTPServer-based demo server.
 
    (sms-demo) user@sms-demo:~/sms-demo$ ./bin/demoserver -h 0.0.0.0 -p 8089 \
-       -s MY-SUPER-SECRET-SECRET -u http://sms-demo.telnyx.com:8089/sms aiohttp
+       -s MY-SUPER-SECRET-SECRET aiohttp
    ```
 
-Please make sure that the `-u` parameter matches the URL that you set as
-the "Webhook URL" for your messaging profile in the [Telnyx
-Portal](https://portal.telnyx.com/). Also, ensure that you are setting
-`-s` to the correct messaging profile secret.
+Please make sure that the `-s` parameter matches the message profile 
+secret that is set for your messaging profile in the [Telnyx Portal]
+(https://portal.telnyx.com/).
 
 ## Miscellaneous notes
 

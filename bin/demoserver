@@ -8,8 +8,6 @@ Options:
   -h, --host TEXT     HTTP server IP.
   -p, --port INTEGER  HTTP server port.
   -s, --secret TEXT   Secret from your SMS messaging profile.  [required]
-  -u, --url TEXT      Callback url from your SMS messaging profile (needed for
-                      signature verification).
   --help              Show this message and exit.
 
 Commands:
@@ -24,7 +22,7 @@ import sys
 import click
 
 from smsdemo import flaskserver, httpserver, aiohttpserver
-from smsdemo.constants import CONFIG_KEY, DEFAULT_IP, DEFAULT_PORT, DEFAULT_WEBHOOK_URL
+from smsdemo.constants import CONFIG_KEY, DEFAULT_IP, DEFAULT_PORT
 from smsdemo.util import ServerConfig
 
 
@@ -35,23 +33,16 @@ from smsdemo.util import ServerConfig
               help="HTTP server port.")
 @click.option("-s", "--secret", type=str, required=True,
               help="Secret from your SMS messaging profile.")
-@click.option("-u", "--url", type=str, default=DEFAULT_WEBHOOK_URL,
-              help="Callback url from your SMS messaging profile "
-                   "(needed for signature verification).")
 @click.pass_context
-def cli(ctx, host, port, secret, url):
+def cli(ctx, host, port, secret):
     """Run a sample SMS echo server. The server accepts Telnyx SMS webhook
     deliveries and sends an echo of the message back to the sender.
-
-    Please ensure that the delivery url option is set properly. Otherwise,
-    signature validation will fail. The url should end with the path "/sms".
     """
 
     ctx.obj[CONFIG_KEY] = ServerConfig(
         host=host,
         port=port,
         secret=secret,
-        url=url,
     )
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 

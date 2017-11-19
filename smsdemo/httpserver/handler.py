@@ -18,7 +18,8 @@ from smsdemo.constants import POST_PATH
 from smsdemo.message import SMSMessage
 from smsdemo.util import (
     ServerConfig, SMSSendError,
-    webhook_sig_hs256, sync_send,
+    get_epoch_from_header, webhook_sig_hs256,
+    sync_send,
 )
 
 
@@ -43,7 +44,8 @@ def handler_factory(conf: ServerConfig):
             logging.info("Received message: %s", msg)
 
             sig = self.headers["X-Telnyx-Signature"]
-            expected_sig = webhook_sig_hs256(conf.secret, conf.url, payload)
+            epoch = get_epoch_from_header(sig)
+            expected_sig = webhook_sig_hs256(conf.secret, post_data, epoch)
             if sig != expected_sig:
                 logging.error("Invalid signature: %s (expected %s)",
                               sig, expected_sig)
