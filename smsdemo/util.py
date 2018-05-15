@@ -13,7 +13,7 @@ from typing import Optional, Union
 import requests
 from aiohttp import ClientSession, ClientError
 
-from smsdemo.constants import SEND_URL
+from smsdemo.constants import SMS_URL
 from smsdemo.message import SMSMessage
 
 
@@ -36,7 +36,7 @@ def sync_send(msg: SMSMessage, secret: str) -> str:
     headers = {"X-Profile-Secret": secret}
     data = msg.as_dict()
 
-    r = requests.post(SEND_URL, headers=headers, data=data)
+    r = requests.post(SMS_URL, headers=headers, data=data)
 
     # Check return code and log the action
     if r.status_code != requests.codes.ok:
@@ -59,7 +59,7 @@ async def async_send(msg: SMSMessage, secret: str) -> str:
 
     try:
         async with ClientSession() as session:
-            async with session.post(SEND_URL, headers=headers, data=data) as resp:
+            async with session.post(SMS_URL, headers=headers, data=data) as resp:
                 resp_text = await resp.text()
                 if resp.status != 200:
                     raise SMSSendError(resp_text)
@@ -69,10 +69,19 @@ async def async_send(msg: SMSMessage, secret: str) -> str:
         raise SMSSendError(e)
 
 
-def get_epoch_from_header(sig_header: str)-> str:
-    """Extracts epoch timestamp from the X-Telnyx-Signature header value"""
+def get_expected_signature(secret: str, sig_header_value: str, raw_payload: bytes):
+    """Extracts signature from the X-Telnyx-Signature header value"""
 
-    sig_key_value = dict(param.split("=", 1) for param in sig_header.split(","))
+    epoch = get_epoch_from_sig_header_value(sig_header_value)
+    expected_sig = webhook_sig_hs256(secret, raw_payload, epoch)
+
+    return expected_sig
+
+
+def get_epoch_from_sig_header_value(sig_header_value: str)-> str:
+    """Extracts signature from the X-Telnyx-Signature header value"""
+
+    sig_key_value = dict(param.split("=", 1) for param in sig_header_value.split(","))
     epoch = sig_key_value["t"]
 
     return epoch
@@ -88,7 +97,7 @@ def webhook_sig_hs256(secret: str, body: Union[bytes, str], epoch: Optional[str]
     """
 
     epoch = epoch or str(int(datetime.utcnow().timestamp()))
-    body_bytes = body if isinstance(body, bytes) else body.encode("utf-8")
+    body_bytes = body if isinstance(body, bytes) else body.encode("UTF-8")
     msg = epoch.encode("ascii") + b"." + body_bytes
 
     hash_bytes = hmac.new(secret.encode("utf-8"),

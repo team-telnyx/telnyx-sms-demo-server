@@ -6,34 +6,31 @@ import logging
 
 from aiohttp import web
 
-from smsdemo.constants import POST_PATH
+from smsdemo.constants import MDR_POST_PATH, SIGNATURE_HEADER_KEY, SMS_POST_PATH
 from smsdemo.message import SMSMessage
 from smsdemo.util import (
-    ServerConfig, SMSSendError,
-    get_epoch_from_header, webhook_sig_hs256,
+    get_expected_signature,
+    ServerConfig,
+    SMSSendError,
     async_send,
 )
 
 
-async def receive_and_echo(request):
-    """Accept and validate an SMS delivery."""
+async def receive_and_echo_sms(request):
+    """Accept, validate, and echo back an SMS delivery."""
 
     secret = request.app["secret"]
 
-    if request.content_type == "application/json":
-        payload = await request.json()
-    else:
-        payload = await request.post()
+    raw_payload = await request.read()
+    payload = await request.json()
 
     msg = SMSMessage.from_payload(payload)
     logging.info("Received message: %s", msg)
 
-    sig = request.headers.get("X-Telnyx-Signature")
-    raw_payload = await request.read()
-    epoch = get_epoch_from_header(sig)
-    expected_sig = webhook_sig_hs256(secret, raw_payload, epoch)
-    if sig != expected_sig:
-        logging.error("Invalid signature: %s (expected %s)", sig, expected_sig)
+    signature = request.headers[SIGNATURE_HEADER_KEY]
+    expected_signature = get_expected_signature(secret, signature, raw_payload)
+    if signature != expected_signature:
+        logging.error("Invalid signature: %s (expected %s)", signature, expected_signature)
         return web.HTTPBadRequest(text="Invalid signature")
 
     try:
@@ -47,10 +44,32 @@ async def receive_and_echo(request):
     return web.Response(text="Echo OK")
 
 
+async def receive_and_log_mdr(request):
+    """Accept, validate, and log an MDR delivery"""
+
+    secret = request.app["secret"]
+
+    raw_payload =  await request.read()
+    payload = await request.json()
+
+    logging.info("Received MDR: %s", payload)
+
+    signature = request.headers[SIGNATURE_HEADER_KEY]
+    expected_signature = get_expected_signature(secret, signature, raw_payload)
+    if signature != expected_signature:
+        logging.error("Invalid signature: %s (expected %s)", signature, expected_signature)
+        return web.HTTPBadRequest(text="Invalid signature")
+
+    return web.Response(text="MDR OK")
+
+
 def run(conf: ServerConfig):
+    """Run the aiohttp-based demo server."""
+
     app = web.Application()
     app["secret"] = conf.secret
-    app.router.add_post(POST_PATH, receive_and_echo)
+    app.router.add_post(SMS_POST_PATH, receive_and_echo_sms)
+    app.router.add_post(MDR_POST_PATH, receive_and_log_mdr)
 
     logging.info("SMS echo server (aiohttp) running on %s:%d", conf.host, conf.port)
     web.run_app(app, host=conf.host, port=conf.port)

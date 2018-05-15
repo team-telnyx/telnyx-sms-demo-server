@@ -11,14 +11,13 @@ integrity of the message before echoing the message back to the sender.
 import http.server
 import json
 import logging
-import urllib.parse
-from typing import Mapping
 
-from smsdemo.constants import POST_PATH
+from smsdemo.constants import MDR_POST_PATH, SIGNATURE_HEADER_KEY, SMS_POST_PATH
 from smsdemo.message import SMSMessage
 from smsdemo.util import (
-    ServerConfig, SMSSendError,
-    get_epoch_from_header, webhook_sig_hs256,
+    get_expected_signature,
+    ServerConfig,
+    SMSSendError,
     sync_send,
 )
 
@@ -32,26 +31,30 @@ def handler_factory(conf: ServerConfig):
     class SMSHandler(http.server.BaseHTTPRequestHandler):
 
         def do_POST(self):
-            if self.path != POST_PATH:
+            if self.path == SMS_POST_PATH:
+                self.receive_and_echo_sms()
+            elif self.path == MDR_POST_PATH:
+                self.receive_and_log_mdr()
+            else:
                 self.send_error(404)
-                return
 
-            content_type = self.headers["Content-Type"]
+        def receive_and_echo_sms(self):
+            """Accept, validate, and echo back an SMS delivery."""
+
             content_length = int(self.headers["Content-Length"])
-            post_data = self.rfile.read(content_length)
-            payload = _extract_payload(post_data, content_type)
+            raw_payload = self.rfile.read(content_length)
+            payload = json.loads(raw_payload)
+
             msg = SMSMessage.from_payload(payload)
             logging.info("Received message: %s", msg)
 
-            sig = self.headers["X-Telnyx-Signature"]
-            epoch = get_epoch_from_header(sig)
-            expected_sig = webhook_sig_hs256(conf.secret, post_data, epoch)
-            if sig != expected_sig:
+            signature = self.headers[SIGNATURE_HEADER_KEY]
+            expected_signature = get_expected_signature(conf.secret, signature, raw_payload)
+            if signature != expected_signature:
                 logging.error("Invalid signature: %s (expected %s)",
-                              sig, expected_sig)
+                              signature, expected_signature)
                 self.send_error(400, "Invalid signature")
                 return
-            logging.info("Validated signature: %s", msg)
 
             try:
                 echo_msg = msg.echo_message()
@@ -64,12 +67,22 @@ def handler_factory(conf: ServerConfig):
             logging.info("Echoed message: %s", echo_msg)
             self.send_response(200, message="Echo OK")
 
+        def receive_and_log_mdr(self):
+            """Accept, validate and logan MDR delivery"""
+
+            content_length = int(self.headers["Content-Length"])
+            raw_payload = self.rfile.read(content_length)
+            payload = json.loads(raw_payload)
+
+            logging.info("Received MDR: %s", payload)
+
+            signature = self.headers[SIGNATURE_HEADER_KEY]
+            expected_signature = get_expected_signature(conf.secret, signature, raw_payload)
+            if signature != expected_signature:
+                logging.error("Invalid signature: %s (expected %s)", signature, expected_signature)
+                self.send_error(400, "Invalid signature")
+                return
+
+            self.send_response(200, "MDR OK")
+
     return SMSHandler
-
-
-def _extract_payload(data: bytes, content_type: str) -> Mapping:
-    if content_type == "application/json":
-        return json.loads(data)
-    else:
-        payload = urllib.parse.parse_qs(data.decode("utf-8"))
-        return {k: v[0] for k, v in payload.items()}

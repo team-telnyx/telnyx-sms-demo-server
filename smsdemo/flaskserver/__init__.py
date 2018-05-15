@@ -2,13 +2,16 @@
 Flask demo server.
 """
 
+import json
+
 from flask import Flask, request
 
-from smsdemo.constants import POST_PATH
+from smsdemo.constants import MDR_POST_PATH, SIGNATURE_HEADER_KEY, SMS_POST_PATH
 from smsdemo.message import SMSMessage
 from smsdemo.util import (
-    ServerConfig, SMSSendError,
-    get_epoch_from_header, webhook_sig_hs256,
+    get_expected_signature,
+    ServerConfig,
+    SMSSendError,
     sync_send,
 )
 
@@ -16,24 +19,22 @@ from smsdemo.util import (
 app = Flask(__name__)
 
 
-@app.route(POST_PATH, methods=["POST"])
-def receive_and_echo():
+@app.route(SMS_POST_PATH, methods=["POST"])
+def receive_and_echo_sms():
+    """Accept, validate, and echo back an SMS delivery."""
+
     secret = app.config["secret"]
 
-    if request.headers.get("Content-Type") == "application/json":
-        payload = request.get_json()
-    else:
-        payload = request.form
+    raw_payload = request.data
+    payload = json.loads(raw_payload.decode("UTF-8"))
 
     msg = SMSMessage.from_payload(payload)
     app.logger.info("Received message: %s", msg)
 
-    sig = request.headers.get("X-Telnyx-Signature")
-    raw_payload = request.data
-    epoch = get_epoch_from_header(sig)
-    expected_sig = webhook_sig_hs256(secret, raw_payload, epoch)
-    if sig != expected_sig:
-        app.logger.error("Invalid signature: %s (expected %s)", sig, expected_sig)
+    signature = request.headers[SIGNATURE_HEADER_KEY]
+    expected_signature = get_expected_signature(secret, signature, raw_payload)
+    if signature != expected_signature:
+        app.logger.error("Invalid signature: %s (expected %s)", signature, expected_signature)
         return "Invalid signature", 400
 
     try:
@@ -45,6 +46,26 @@ def receive_and_echo():
 
     app.logger.info("Echoed message: %s", echo_msg)
     return "Echo OK", 200
+
+
+@app.route(MDR_POST_PATH, methods=["POST"])
+def receive_and_log_mdr():
+    """Accept, validate and logan MDR delivery"""
+
+    secret = app.config["secret"]
+
+    raw_payload = request.data
+    payload = json.loads(raw_payload.decode("UTF-8"))
+
+    app.logger.info("Received MDR: %s", payload)
+
+    signature = request.headers[SIGNATURE_HEADER_KEY]
+    expected_signature = get_expected_signature(secret, signature, raw_payload)
+    if signature != expected_signature:
+        app.logger.error("Invalid signature: %s (expected %s)", signature, expected_signature)
+        return "Invalid signature", 400
+
+    return "MDR OK", 200
 
 
 def run(conf: ServerConfig):
