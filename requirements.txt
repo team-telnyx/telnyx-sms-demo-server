@@ -1,4 +1,4 @@
-aiohttp==3.2.1
+aiohttp==3.8.5
 click==6.7
 Flask==1.0.2
 requests==2.18.4
